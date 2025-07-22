@@ -9,6 +9,7 @@ use ratatui_json_editor::app::{App, CurrentScreen, CurrentlyEditing};
 use ratatui_json_editor::ui::ui;
 use std::io;
 use anyhow::Result;
+use serde_json::{Serializer, Deserializer};
 
 fn main() -> Result<()> {
     // setup terminal

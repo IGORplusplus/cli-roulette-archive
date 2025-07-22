@@ -1,15 +1,9 @@
 use std::collections::HashMap;
+use std::os::unix::thread;
 use anyhow::Result;
 use rand::distributions::{ Distribution, WeightedIndex };
 use rand::thread_rng;
 use rand::seq::SliceRandom;
-
-//wrap this in an option for the none
-pub enum CurrentTurn {
-    Playing,
-    Enemy(usize), //cpu will be 0
-}
-
 
 //local and online multiplayer, and singleplayer
 //multiplayer items easier to pull off, ten second timer is when a shot could be first fired
@@ -64,13 +58,41 @@ impl ItemS {
     pub fn all() -> impl Iterator<Item = ItemS> {
         ALL_ITEMS.into_iter()
     }
+    pub fn new_items(num_items: u8) -> Vec<ItemS> {
+        let mut rng = thread_rng();
+        let mut items = Vec::new();
+        for _ in 0..num_items {
+            if let Some(item) = ALL_ITEMS.choose(&mut rng) {
+                items.push(*item);
+            }
+        }
+        items
+    }
 }
 
 pub struct Player {
     pub name: String,
-    pub id: u8,
     pub items: Vec<ItemS>,
     pub health: u8,
+    pub cpu: bool,
+}
+
+pub fn player_init_single() -> Vec<Player> {
+    let user_items = ItemS::new_items(2);
+    let cpu_items = ItemS::new_items(2);
+    let user1 = Player {
+        name: String::from("player1"),
+        items: user_items,
+        health: 3,
+        cpu: false,
+    };
+    let cpu = Player {
+        name: String::from("cpu"),
+        items: cpu_items,
+        health: 3,
+        cpu: true,
+    };
+    vec![ user1, cpu ]
 }
 
 pub enum Selection {
@@ -81,6 +103,42 @@ pub enum Selection {
 pub enum Shell {
     Live,
     Blank,
+    Incendiary,
+    BeanBag,
+    Electric,
+}
+
+pub struct Shotgun {
+    shells: Vec<Shell>,
+    state: ShotgunState,
+}
+pub enum ShotgunState {
+    Default,
+    SawedOff,
+    HotPotato,
+}
+
+use ShotgunState::*;
+impl Shotgun {
+
+    pub fn new() -> Shotgun { 
+        Shotgun { 
+            shells: Vec::new(),
+            state: Default,
+        }
+    }
+
+    pub fn reload(number_shells: u8, wild_card: bool) -> Shotgun {
+
+        Shotgun {
+            shells: new_shells,
+            state: Default,
+        }
+    }
+}
+
+pub enum CurrentTurn {
+    Playing(usize),
 }
 
 pub enum CurrentScreen {
@@ -91,53 +149,13 @@ pub enum CurrentScreen {
     Exiting,
 }
 
-pub struct Data {
-    pub players: Vec<Player>,
-    pub items: Vec<ItemS>,
-    pub turn: u8,
-}
-
 pub struct App {
-    pub item_selected: Option<ItemS>,
-    pub player_turn: Option<Player>, //whose turn it is
-    pub player: Player,
-    pub enemy: Player,
+    pub item_selected: Option<ItemS>, //when an item is selected it takes two seconds to use
+    pub player_turn: Option<CurrentTurn>, //whose turn it is
+    pub players: Players,
     pub current_screen: Option<CurrentScreen>, // the current screen the user is looking at, and will later determine what is rendered.
-    pub data: Data,
     pub currently_selecting: Option<Selection>,
-    pub shotgun: Vec<Shell>,
-}
-
-impl Data {
-    pub fn new() -> Data {
-        Data {
-            players: Vec::new(),
-            items: Vec::new(),
-            turn: 0,
-        }
-    }
-
-    pub fn default_single(name: String, health: u8) -> Data {
-        let player1 = Player {
-            name: String::from(name),
-            id: 0, 
-            items: vec![ItemS::AED],
-            health: health,
-        }
-        let cpu = Player {
-            name: String::from("cpu"),
-            id: 1,
-            items: vec![ItemS::AED],
-            health: health,
-        }
-        Data {
-            players: vec![player1, cpu],
-            //will not reallt be using this items vector
-            //until I come up with shared items
-            items: Vec::new(),
-            turn: 0,
-        }
-    }
+    pub shotgun: Shotgun,
 }
 
 impl Player {
@@ -150,14 +168,16 @@ impl Player {
     }
 
     pub fn new_with_health(passed_health: u8) -> Player {
+
         Player {
-            name: String::new(),
+            name: self.name,
             items: vec![ItemS::AED],
             health: passed_health,
         }
     }
 
-    pub fn reload(player: Player, item_count: u8) -> Player {
+    //called after every shot is taken
+    pub fn new_items_reload(player: Player, item_count: u8) -> Player {
         let mut rng = thread_rng();
         let mut all_items: Vec<ItemS> = ItemS::all().collect();
 
@@ -190,35 +210,14 @@ impl Player {
 
 
 impl App {
-    pub fn new() -> App {
-
+    pub fn initialize() -> App {
         App {
-            item_selected: None,
-            player: Player::new(),
-            enemy: Player::new(),
+            item_selected: None(),
+            player_turn: None(),
+            players: Players::new(),
             current_screen: Some(CurrentScreen::Menu),
+            shotgun: Shotgun::new(),
         }
-    }
-
-    // --snip--
-    pub fn save_key_value(&mut self) {
-        self.pairs
-            .insert(
-                self.key_input
-                    .clone(),
-
-                self.value_input
-                    .clone()
-            );
-
-        self.key_input 
-            = String::new();
-
-        self.value_input 
-            = String::new();
-
-        self.currently_editing 
-            = None;
     }
 
     pub fn toggle_editing(&mut self) {

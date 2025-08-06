@@ -11,6 +11,13 @@ use std::io;
 use anyhow::Result;
 use serde_json::{Serializer, Deserializer};
 
+mod app;
+mod player;
+mod shotgun;
+mod items;
+mod enums;
+mod ui;
+
 fn main() -> Result<()> {
     // setup terminal
     enable_raw_mode()?;
